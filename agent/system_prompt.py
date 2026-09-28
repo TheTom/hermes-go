@@ -696,7 +696,7 @@ def _coding_parts(agent: Any) -> Tuple[List[str], List[str], List[str]]:
 def _post_workspace_parts(agent: Any) -> List[str]:
     """Blocks that follow the worktree-specific context: environment probe
     (config.yaml agent.environment_probe; one line, nothing when clean, skipped
-    for remote backends), bot-mode protocol, profile line, platform hint."""
+    for remote backends), bot-mode protocol, platform hint."""
     parts: List[str] = []
     if getattr(agent, "_environment_probe", True):
         try:
@@ -706,7 +706,7 @@ def _post_workspace_parts(agent: Any) -> List[str]:
             pass  # Probe failure must never block prompt build.
     if getattr(agent, "_bot_mode_protocol", True):
         parts.extend(_bot_mode_parts(agent))
-    parts += [_active_profile_line(agent), platform_hint(agent)]
+    parts.append(platform_hint(agent))
     return parts
 
 
@@ -784,6 +784,9 @@ def build_system_prompt_parts(agent: Any, system_message: Optional[str] = None) 
     # Plugin sections are confined to one coarse anchor in the volatile tail so
     # a resumed process can reconstruct the stable prefix without re-running plugins.
     volatile_parts.extend(_plugin_section_blocks(_frozen_plugin_prompt_sections(agent), "after_memory"))
+    # The profile line names this home's path, so it rides in the volatile tier: the stable
+    # prefix then stays byte-identical across every profile (and home) on the host.
+    volatile_parts.append(_active_profile_line(agent))
     volatile_parts.append(_timestamp_line(agent))
     # Keep the renderer-owned runtime anchor after all user/plugin prose so quoted
     # host examples cannot shadow it during persisted-prompt validation.
@@ -868,25 +871,3 @@ def format_tools_for_system_message(agent: Any) -> str:
 
 __all__ = ["build_system_prompt_parts", "build_system_prompt", "invalidate_system_prompt",
            "platform_hint", "restore_plugin_prompt_sections", "format_tools_for_system_message"]
-
-
-# ---- BEGIN PLUGIN-COMPAT (revert-scheduled; see COMPAT_MANIFEST.md) ----
-# Names external plugins imported from this module before the Sep 2026 decomposition.
-# Internal code MUST NOT use these (scripts/check_compat_pointers.py fails CI if it does).
-# The whole block is removed by reverting the commit that added it.
-
-
-_PLUGIN_COMPAT_LAZY = {
-    'OPENAI_MODEL_EXECUTION_GUIDANCE': ('agent.prompt_builder', 'OPENAI_MODEL_EXECUTION_GUIDANCE'),
-}
-
-
-def __getattr__(name):  # PEP 562 — lazy so no import cycles
-    target = _PLUGIN_COMPAT_LAZY.get(name)
-    if target is None:
-        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
-    import importlib
-    from hermes_cli.plugin_compat import warn_once
-    warn_once(__name__, name, *target)
-    return getattr(importlib.import_module(target[0]), target[1])
-# ---- END PLUGIN-COMPAT ----

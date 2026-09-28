@@ -483,6 +483,23 @@ class TestNamedProfileHintIntegration:
         assert f"under {root}/profiles/<name>/." in prompt
 
 
+def test_stable_tier_is_identical_across_homes(tmp_path, monkeypatch):
+    """The profile line names the home path, so it must live outside the stable tier:
+    every home/profile on a host then shares one cacheable stable prefix."""
+    monkeypatch.delenv("TERMINAL_CWD", raising=False)
+    tiers = []
+    for name in ("a", "b"):
+        root = tmp_path / name / ".hermes"
+        root.mkdir(parents=True)
+        monkeypatch.setattr(Path, "home", lambda root=root: root.parent)
+        monkeypatch.setenv("HERMES_HOME", str(root))
+        with patch("agent.coding_context._coding_mode", return_value="off"):
+            parts = _prompt_parts(_make_agent(valid_tool_names=["read_file"]))
+        assert f"under {root}/profiles/<name>/." in parts["volatile"]
+        tiers.append(parts["stable"])
+    assert tiers[0] == tiers[1]
+
+
 def test_build_system_prompt_records_stable_prefix():
     agent = _make_agent()
     with (
