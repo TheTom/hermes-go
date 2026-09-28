@@ -966,6 +966,7 @@ class BotsViewState {
   const BotsViewState({
     required this.available,
     this.profiles = const [],
+    this.hiddenProfiles = const [],
     this.groupRooms = const {},
     this.syncError,
   });
@@ -973,11 +974,13 @@ class BotsViewState {
   const BotsViewState.unavailable()
     : available = false,
       profiles = const [],
+      hiddenProfiles = const [],
       groupRooms = const {},
       syncError = null;
 
   final bool available;
   final List<HermesBotProfile> profiles;
+  final List<HermesBotProfile> hiddenProfiles;
   final Map<String, HermesBotGroupRoom> groupRooms;
   final String? syncError;
 }
@@ -1062,6 +1065,7 @@ class BotsNotifier extends AsyncNotifier<BotsViewState> {
     return BotsViewState(
       available: roster.available,
       profiles: roster.profiles,
+      hiddenProfiles: roster.hiddenProfiles,
       groupRooms: parseHermesBotGroupRooms(profiles),
     );
   }
@@ -1090,6 +1094,7 @@ class BotsNotifier extends AsyncNotifier<BotsViewState> {
         BotsViewState(
           available: fresh.available || remembered,
           profiles: fresh.profiles,
+          hiddenProfiles: fresh.hiddenProfiles,
           groupRooms: fresh.groupRooms,
           syncError: fresh.syncError,
         ),
@@ -1101,6 +1106,7 @@ class BotsNotifier extends AsyncNotifier<BotsViewState> {
           BotsViewState(
             available: true,
             profiles: previous!.profiles,
+            hiddenProfiles: previous.hiddenProfiles,
             groupRooms: previous.groupRooms,
             syncError: '$e',
           ),

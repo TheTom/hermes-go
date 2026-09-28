@@ -196,7 +196,7 @@ void main() {
     expect(list.params['include_hidden'], isTrue);
   });
 
-  test('starting a new bot chat makes it visible and sticky', () async {
+  test('starting another bot conversation does not replace Bot Chat', () async {
     final realtime = _BotRealtime(repo);
     repo.bindRealtime(realtime);
     addTearDown(realtime.dispose);
@@ -217,14 +217,15 @@ void main() {
     );
     expect(create.params['profile'], 'coach');
     expect(create.params['hidden'], isFalse);
-    final pin = realtime.calls.lastWhere(
-      (call) => call.method == 'profiles.configure',
+    expect(create.params['follow_profile_config'], isTrue);
+    expect(create.params['title'], startsWith('Conversation '));
+    expect(
+      realtime.calls.where((call) => call.method == 'profiles.configure'),
+      isEmpty,
     );
-    final metadata = (pin.params['ui_meta'] as Map)['hermes-bots'] as Map;
-    expect(metadata['chat'], 'fresh-health-chat');
   });
 
-  test('selecting bot history resumes and pins that conversation', () async {
+  test('selecting bot history leaves canonical Bot Chat unchanged', () async {
     final realtime = _BotRealtime(repo);
     repo.bindRealtime(realtime);
     addTearDown(realtime.dispose);
@@ -248,11 +249,10 @@ void main() {
     );
     expect(resume.params['session_id'], 'older-chat');
     expect(resume.params['profile'], 'coach');
-    final pin = realtime.calls.lastWhere(
-      (call) => call.method == 'profiles.configure',
+    expect(
+      realtime.calls.where((call) => call.method == 'profiles.configure'),
+      isEmpty,
     );
-    final metadata = (pin.params['ui_meta'] as Map)['hermes-bots'] as Map;
-    expect(metadata['chat'], 'older-chat');
   });
 
   test('bot creation writes profile and desktop-compatible metadata', () async {
@@ -432,6 +432,36 @@ void main() {
     expect(metadata['group'], 'Cats');
   });
 
+  test('bot visibility writes literal values without losing fields', () async {
+    final realtime = _BotRealtime(repo);
+    repo.bindRealtime(realtime);
+    addTearDown(realtime.dispose);
+    final bot = HermesBotProfile.fromJson({
+      'name': 'techno',
+      'ui_meta': {
+        'hermes-bots': {'title': 'Senior cat wrangler', 'group': 'Cats'},
+      },
+    });
+
+    await repo.updateBotHidden(bot, true);
+
+    var configure = realtime.calls.singleWhere(
+      (call) => call.method == 'profiles.configure',
+    );
+    var metadata = (configure.params['ui_meta'] as Map)['hermes-bots'] as Map;
+    expect(metadata['hidden'], isTrue);
+    expect(metadata['title'], 'Senior cat wrangler');
+    expect(metadata['group'], 'Cats');
+
+    realtime.calls.clear();
+    await repo.updateBotHidden(bot, false);
+    configure = realtime.calls.singleWhere(
+      (call) => call.method == 'profiles.configure',
+    );
+    metadata = (configure.params['ui_meta'] as Map)['hermes-bots'] as Map;
+    expect(metadata['hidden'], isFalse);
+  });
+
   test('bot profile description parses server-owned capabilities', () async {
     final realtime = _BotRealtime(repo);
     repo.bindRealtime(realtime);
@@ -500,15 +530,21 @@ void main() {
             'healthCoach': true,
           },
         },
+        'canonical_session': {
+          'id': 'old-chat',
+          'resolved_id': 'old-chat',
+          'root_title': 'Bot Chat',
+          'title': 'Bot Chat',
+        },
       });
 
       final target = await repo.openBotChat(bot);
 
       expect(target.created, isFalse);
-      expect(target.session.id, 'fresh-health-chat');
+      expect(target.session.id, 'old-chat');
       expect(
         realtime.calls.where((call) => call.method == 'session.create'),
-        hasLength(1),
+        isEmpty,
       );
       final capabilitySave = realtime.calls.firstWhere(
         (call) => call.params['enabled_toolsets'] != null,
@@ -517,11 +553,9 @@ void main() {
         'web',
         'apple_health',
       ]);
-      final repin = realtime.calls.lastWhere(
-        (call) => call.method == 'profiles.configure',
-      );
-      final metadata = (repin.params['ui_meta'] as Map)['hermes-bots'] as Map;
-      expect(metadata['chat'], 'fresh-health-chat');
+      final metadata =
+          (capabilitySave.params['ui_meta'] as Map)['hermes-bots'] as Map;
+      expect(metadata, isNot(contains('chat')));
       expect(metadata, isNot(contains('healthCoach')));
       expect(metadata, isNot(contains('healthRoutingVersion')));
     },
@@ -574,7 +608,7 @@ void main() {
       expect(metadata['title'], 'Senior cat wrangler');
       expect(metadata['shape'], 'cloud');
       expect(metadata['imageKind'], 'photo');
-      expect(metadata['chat'], 'bot-session');
+      expect(metadata, isNot(contains('chat')));
       expect(metadata['created'], 42);
       expect(updated.displayName, 'Senior cat wrangler');
       expect(updated.description, 'Caturday jokes');
@@ -582,7 +616,7 @@ void main() {
   );
 
   test(
-    'changing standard capabilities pins a fresh tool-schema session',
+    'changing capabilities preserves the server-owned canonical chat',
     () async {
       final realtime = _BotRealtime(repo);
       repo.bindRealtime(realtime);
@@ -610,17 +644,6 @@ void main() {
         enabledToolsets: const ['web', 'apple_health'],
       );
 
-      final create = realtime.calls.singleWhere(
-        (call) => call.method == 'session.create',
-      );
-      expect(create.params['profile'], 'coach');
-      expect(create.params['hidden'], isFalse);
-      final repin = realtime.calls.lastWhere(
-        (call) => call.method == 'profiles.configure',
-      );
-      final metadata = (repin.params['ui_meta'] as Map)['hermes-bots'] as Map;
-      expect(metadata['chat'], 'fresh-health-chat');
-      expect(metadata, isNot(contains('healthCoach')));
       final capabilitySave = realtime.calls.firstWhere(
         (call) => call.params['enabled_toolsets'] != null,
       );
@@ -628,6 +651,14 @@ void main() {
         'web',
         'apple_health',
       ]);
+      final metadata =
+          (capabilitySave.params['ui_meta'] as Map)['hermes-bots'] as Map;
+      expect(metadata, isNot(contains('chat')));
+      expect(metadata, isNot(contains('healthCoach')));
+      expect(
+        realtime.calls.where((call) => call.method == 'session.create'),
+        isEmpty,
+      );
     },
   );
 
@@ -674,17 +705,12 @@ void main() {
     expect(configure.params['enabled_mcp_servers'], ['notion']);
     expect(
       realtime.calls.where((call) => call.method == 'session.create'),
-      hasLength(1),
+      isEmpty,
     );
-    final fresh = realtime.calls.singleWhere(
-      (call) => call.method == 'session.create',
-    );
-    expect(fresh.params['model'], 'gpt-5.6-sol');
-    expect(fresh.params['provider'], 'openai-codex');
   });
 
   test(
-    'renaming a bot updates its generated soul and pins a fresh session',
+    'renaming a bot updates its generated soul without forking Bot Chat',
     () async {
       final realtime = _BotRealtime(
         repo,
@@ -723,7 +749,7 @@ void main() {
       expect(save.params['soul'], isNot(contains('Fotness coach')));
       expect(
         realtime.calls.where((call) => call.method == 'session.create'),
-        hasLength(1),
+        isEmpty,
       );
     },
   );

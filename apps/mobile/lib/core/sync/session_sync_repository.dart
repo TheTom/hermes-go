@@ -984,6 +984,7 @@ class SessionSyncRepository {
     bool? fastMode,
     String? profile,
     bool hidden = false,
+    bool followProfileConfig = false,
   }) async {
     final rt = _realtime;
     if (rt == null || !rt.isLive) {
@@ -993,6 +994,7 @@ class SessionSyncRepository {
       'source': 'mobile',
       if (profile != null && profile.isNotEmpty) 'profile': profile,
       'hidden': hidden,
+      if (followProfileConfig) 'follow_profile_config': true,
       if (title != null && title.isNotEmpty) 'title': title,
       if (model != null && model.isNotEmpty) 'model': model,
       if (provider != null && provider.isNotEmpty) 'provider': provider,
@@ -1090,9 +1092,34 @@ class SessionSyncRepository {
   ) async {
     final profile = bot.name.trim();
     if (profile.isEmpty) throw StateError('Bot profile name is missing');
+
+    Future<HermesSession> resume(HermesSession stored) async {
+      final resumed = await gatewayRequest('session.resume', {
+        'session_id': stored.id,
+        'profile': profile,
+      });
+      final liveId = '${resumed['session_id'] ?? ''}'.trim();
+      if (liveId.isEmpty) throw StateError('Gateway could not resume Bot Chat');
+      registerSessionProfile(stored.id, profile);
+      _registerLiveMapping(storedId: stored.id, liveId: liveId);
+      return stored;
+    }
+
+    // Current gateways resolve the forever-chat by its exact title and expose
+    // both the durable registry id and the compression-lineage tip. Trust that
+    // server-owned identity first; the old ui_meta `chat` pointer is retired.
+    final canonical = bot.canonicalSession;
+    if (canonical != null && canonical.id.trim().isNotEmpty) {
+      return (session: await resume(canonical), created: false);
+    }
+
+    // Exact, hidden lookup matches Desktop and remains compatible with a
+    // gateway that supports canonical Bot Chats but predates the rich roster.
     final listed = await gatewayRequest('session.list', {
       'profile': profile,
-      'limit': 100,
+      'title': 'Bot Chat',
+      'limit': 200,
+      'include_hidden': true,
     });
     final rawRows = listed['sessions'];
     final rows = rawRows is List
@@ -1101,67 +1128,82 @@ class SessionSyncRepository {
               .map((row) => row.cast<String, dynamic>())
               .toList(growable: false)
         : const <Map<String, dynamic>>[];
-    final pinned = bot.chatSessionId?.trim();
-    Map<String, dynamic>? selected;
-    if (pinned != null && pinned.isNotEmpty) {
-      selected = rows
-          .where((row) => '${row['id'] ?? ''}' == pinned)
-          .firstOrNull;
-      if (selected == null) {
-        // Bot chats are intentionally hidden from ordinary session lists.
-        // A missing list row therefore does not mean the profile-owned pin is
-        // stale: validate it by resuming directly before recovery creates a
-        // replacement (and re-sends the first-run greeting).
-        try {
-          final resumed = await gatewayRequest('session.resume', {
-            'session_id': pinned,
-            'profile': profile,
-          });
-          final liveId = '${resumed['session_id'] ?? ''}'.trim();
-          if (liveId.isNotEmpty) {
-            registerSessionProfile(pinned, profile);
-            _registerLiveMapping(storedId: pinned, liveId: liveId);
-            final last = bot.lastSession;
-            final now = DateTime.now().toUtc().toIso8601String();
-            return (
-              session: HermesSession(
-                id: pinned,
-                source: last?.source ?? 'mobile',
-                model: bot.model ?? last?.model,
-                title: last?.title ?? 'Bot Chat',
-                startedAt: last?.startedAt ?? now,
-                lastActive: last?.lastActive ?? now,
-                messageCount: last?.messageCount ?? 0,
-                preview: last?.preview,
-              ),
-              created: false,
-            );
-          }
-        } catch (error) {
-          debugPrint('Bot pin $pinned is not resumable: $error');
-        }
-      }
-    }
-    selected ??= rows.firstOrNull;
+    final selected = rows.where((row) {
+      final rootTitle = '${row['root_title'] ?? ''}'.trim();
+      final title = '${row['title'] ?? ''}'.trim();
+      return rootTitle == 'Bot Chat' ||
+          (rootTitle.isEmpty && title == 'Bot Chat');
+    }).firstOrNull;
     if (selected != null) {
       final session = HermesSession.fromJson({
         ...selected,
+        'id': selected['resolved_id'] ?? selected['id'],
         'model': bot.model,
         'last_active': selected['last_active'] ?? selected['started_at'],
       });
-      registerSessionProfile(session.id, profile);
-      if (pinned != session.id) await _pinBotChat(bot, session.id);
-      return (session: session, created: false);
+      return (session: await resume(session), created: false);
+    }
+
+    final legacyPinned = bot.chatSessionId?.trim();
+    if (legacyPinned != null && legacyPinned.isNotEmpty) {
+      final last = bot.activitySession;
+      final now = DateTime.now().toUtc().toIso8601String();
+      try {
+        final session = HermesSession(
+          id: legacyPinned,
+          source: last?.source ?? 'mobile',
+          model: bot.model ?? last?.model,
+          title: last?.title ?? 'Bot Chat',
+          startedAt: last?.startedAt ?? now,
+          lastActive: last?.lastActive ?? now,
+          messageCount: last?.messageCount ?? 0,
+          preview: last?.preview,
+        );
+        return (session: await resume(session), created: false);
+      } catch (error) {
+        debugPrint('Legacy Bot Chat pointer is not resumable: $error');
+      }
     }
 
     final created = await _createSessionOnGateway(
       title: 'Bot Chat',
-      model: bot.model,
-      provider: bot.provider,
       profile: profile,
-      hidden: false,
+      hidden: true,
+      followProfileConfig: true,
     );
-    await _pinBotChat(bot, created.id);
+    final liveId = _liveByStored[created.id];
+    if (liveId != null && liveId.isNotEmpty) {
+      try {
+        // Materialize the lazy row before opening it. This also closes the
+        // window where auto-title could steal the canonical registry name.
+        await gatewayRequest('session.title', {
+          'session_id': liveId,
+          'title': 'Bot Chat',
+        });
+      } catch (error) {
+        if (!'$error'.toLowerCase().contains('already in use')) rethrow;
+        // Another client won the title race. Adopt that row instead of
+        // turning this empty lazy session into a second forever-chat.
+        final winner = await gatewayRequest('session.list', {
+          'profile': profile,
+          'title': 'Bot Chat',
+          'limit': 200,
+          'include_hidden': true,
+        });
+        final winnerRows = winner['sessions'];
+        if (winnerRows is List && winnerRows.whereType<Map>().isNotEmpty) {
+          final row = winnerRows.whereType<Map>().first.cast<String, dynamic>();
+          final session = HermesSession.fromJson({
+            ...row,
+            'id': row['resolved_id'] ?? row['id'],
+            'model': bot.model,
+            'last_active': row['last_active'] ?? row['started_at'],
+          });
+          return (session: await resume(session), created: false);
+        }
+        rethrow;
+      }
+    }
     return (session: created, created: true);
   }
 
@@ -1191,24 +1233,24 @@ class SessionSyncRepository {
         .toList(growable: false);
   }
 
-  /// Start a distinct conversation for this bot and make it the canonical
-  /// chat resumed by a normal roster tap.
+  /// Start a distinct, visible conversation for this bot. The roster tap
+  /// continues to target the single canonical `Bot Chat`; alternate sessions
+  /// never replace that server-owned identity.
   Future<HermesSession> createBotSession(HermesBotProfile bot) async {
     final profile = bot.name.trim();
     if (profile.isEmpty) throw StateError('Bot profile name is missing');
+    final createdAt = DateTime.now().toLocal().toIso8601String();
     final created = await _createSessionOnGateway(
-      title: 'Bot Chat',
-      model: bot.model,
-      provider: bot.provider,
+      title: 'Conversation ${createdAt.replaceFirst('T', ' ')}',
       profile: profile,
       hidden: false,
+      followProfileConfig: true,
     );
-    await _pinBotChat(bot, created.id);
     return created;
   }
 
-  /// Resume one historical bot conversation and pin it as the bot's sticky
-  /// default for subsequent roster taps.
+  /// Resume one historical bot conversation without changing which session
+  /// owns the bot's canonical roster entry.
   Future<HermesSession> openBotSession(
     HermesBotProfile bot,
     HermesSession stored,
@@ -1223,7 +1265,6 @@ class SessionSyncRepository {
     if (liveId.isEmpty) throw StateError('Gateway could not resume bot chat');
     _registerLiveMapping(storedId: stored.id, liveId: liveId);
     registerSessionProfile(stored.id, profile);
-    await _pinBotChat(bot, stored.id);
     return stored;
   }
 
@@ -1386,6 +1427,7 @@ class SessionSyncRepository {
       ..['title'] = title.trim()
       ..['custom'] = true;
     metadata
+      ..remove('chat')
       ..remove('healthCoach')
       ..remove('healthRoutingVersion');
 
@@ -1428,33 +1470,6 @@ class SessionSyncRepository {
             (enabledToolsets != null && applied['toolsets'] != true) ||
             (enabledMcpServers != null && applied['mcp_servers'] != true))) {
       throw StateError('Server could not save all bot profile changes');
-    }
-
-    // Tool schemas and system prompts are fixed for a session to preserve
-    // prompt caching. Pin a fresh Bot Chat after either changes.
-    if (soulChanged ||
-        cleanModel.isNotEmpty ||
-        disabledSkills != null ||
-        enabledToolsets != null ||
-        enabledMcpServers != null) {
-      final fresh = await _createSessionOnGateway(
-        title: 'Bot Chat',
-        model: cleanModel.isNotEmpty ? cleanModel : bot.model,
-        provider: cleanProvider.isNotEmpty ? cleanProvider : bot.provider,
-        profile: profile,
-        hidden: false,
-      );
-      metadata['chat'] = fresh.id;
-      final repinned = await gatewayRequest('profiles.configure', {
-        'name': profile,
-        'ui_meta': {'hermes-bots': metadata},
-      });
-      final repinnedApplied = repinned['applied'];
-      if (repinnedApplied is Map && repinnedApplied['ui_meta'] != true) {
-        throw StateError(
-          'Bot capabilities changed, but the fresh chat could not be pinned',
-        );
-      }
     }
 
     return HermesBotProfile.fromJson({
@@ -1577,6 +1592,28 @@ class SessionSyncRepository {
     }
   }
 
+  /// Hide or restore a Bot Mode profile using the shared Desktop metadata.
+  /// A literal `false` is intentional: it clears a stale hidden value when
+  /// older clients merge rather than replace the metadata object.
+  Future<void> updateBotHidden(HermesBotProfile bot, bool hidden) async {
+    final profile = bot.name.trim();
+    if (profile.isEmpty) throw StateError('Bot profile name is missing');
+    final rawUi = bot.raw['ui_meta'];
+    final rawMeta = rawUi is Map ? rawUi['hermes-bots'] : null;
+    final metadata = rawMeta is Map
+        ? rawMeta.map((key, value) => MapEntry('$key', value))
+        : <String, dynamic>{};
+    metadata['hidden'] = hidden;
+    final result = await gatewayRequest('profiles.configure', {
+      'name': profile,
+      'ui_meta': {'hermes-bots': metadata},
+    });
+    final applied = result['applied'];
+    if (applied is Map && applied['ui_meta'] != true) {
+      throw StateError('Server could not save the bot visibility');
+    }
+  }
+
   /// Permanently delete the real Hermes profile backing a custom bot.
   Future<void> deleteBot(HermesBotProfile bot) async {
     final profile = bot.name.trim();
@@ -1590,23 +1627,6 @@ class SessionSyncRepository {
     }
     await dashboard.deleteProfile(profile);
     _profileBySession.removeWhere((_, value) => value == profile);
-  }
-
-  Future<void> _pinBotChat(HermesBotProfile bot, String sessionId) async {
-    final rawUi = bot.raw['ui_meta'];
-    final rawMeta = rawUi is Map ? rawUi['hermes-bots'] : null;
-    final meta = rawMeta is Map
-        ? rawMeta.map((key, value) => MapEntry('$key', value))
-        : <String, dynamic>{};
-    meta['chat'] = sessionId;
-    final result = await gatewayRequest('profiles.configure', {
-      'name': bot.name,
-      'ui_meta': {'hermes-bots': meta},
-    });
-    final applied = result['applied'];
-    if (applied is Map && applied['ui_meta'] == false) {
-      throw StateError('Server could not save the bot chat');
-    }
   }
 
   bool _isSessionNotFound(Object error) {

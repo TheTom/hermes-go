@@ -100,6 +100,15 @@ void main() {
               'last_active': 1786924800,
               'message_count': 9,
             },
+            'canonical_session': {
+              'id': 'canonical-root',
+              'resolved_id': 'canonical-tip',
+              'root_title': 'Bot Chat',
+              'title': 'Bot Chat',
+              'preview': 'Fresh direct reply',
+              'last_active': 1786924900,
+              'message_count': 11,
+            },
             'ui_meta': {
               'hermes-bots': {
                 'title': 'Research Desk',
@@ -114,15 +123,26 @@ void main() {
               },
             },
           },
+          {
+            'name': 'archived-researcher',
+            'ui_meta': {
+              'hermes-bots': {'title': 'Archived Researcher', 'hidden': true},
+            },
+          },
           {'name': 'default', 'is_default': true},
         ],
       });
 
       expect(roster.available, isTrue);
       expect(roster.profiles, hasLength(1));
+      expect(roster.hiddenProfiles, hasLength(1));
+      expect(roster.hiddenProfiles.single.name, 'archived-researcher');
+      expect(roster.hiddenProfiles.single.hidden, isTrue);
       final researcher = roster.profiles.first;
       expect(researcher.displayName, 'Research Desk');
-      expect(researcher.chatSessionId, 'session-1');
+      expect(researcher.chatSessionId, 'canonical-tip');
+      expect(researcher.canonicalRegistryId, 'canonical-root');
+      expect(researcher.activitySession?.preview, 'Fresh direct reply');
       expect(researcher.handle, 'researcher');
       expect(researcher.showsHandle, isTrue);
       expect(researcher.shape, 'hexagon');

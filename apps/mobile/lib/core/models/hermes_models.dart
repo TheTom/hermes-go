@@ -801,6 +801,8 @@ class HermesBotProfile {
     this.isDefault = false,
     this.hasAvatar = false,
     this.lastSession,
+    this.canonicalSession,
+    this.canonicalRegistryId,
     this.title,
     this.color,
     this.shape,
@@ -810,6 +812,7 @@ class HermesBotProfile {
     this.chatSessionId,
     this.createdAt,
     this.pinned = false,
+    this.hidden = false,
     this.raw = const {},
   });
 
@@ -820,6 +823,8 @@ class HermesBotProfile {
   final bool isDefault;
   final bool hasAvatar;
   final HermesSession? lastSession;
+  final HermesSession? canonicalSession;
+  final String? canonicalRegistryId;
   final String? title;
   final String? color;
   final String? shape;
@@ -832,6 +837,7 @@ class HermesBotProfile {
   final String? chatSessionId;
   final int? createdAt;
   final bool pinned;
+  final bool hidden;
   final Map<String, dynamic> raw;
 
   /// Profiles explicitly enrolled by Bot Mode carry its UI metadata. Older
@@ -864,11 +870,35 @@ class HermesBotProfile {
   bool get usesImageAvatar => imageKind?.toLowerCase() == 'photo';
 
   int get activityMillis {
-    final last = parseServerTimeMillis(lastSession?.lastActive);
+    final last = parseServerTimeMillis(activitySession?.lastActive);
     return last > (createdAt ?? 0) ? last : (createdAt ?? 0);
   }
 
+  /// The newest conversation signal for the roster. Canonical Bot Chats are
+  /// hidden from ordinary session listings, so `last_session` alone can show
+  /// a bot as idle even after a recent direct conversation.
+  HermesSession? get activitySession {
+    final canonical = canonicalSession;
+    final last = lastSession;
+    if (canonical == null || last == null) return canonical ?? last;
+    return parseServerTimeMillis(canonical.lastActive) >=
+            parseServerTimeMillis(last.lastActive)
+        ? canonical
+        : last;
+  }
+
   factory HermesBotProfile.fromJson(Map<String, dynamic> json) {
+    int? integer(dynamic value) {
+      if (value is int) return value;
+      if (value is num) return value.toInt();
+      return int.tryParse('${value ?? ''}');
+    }
+
+    String? text(dynamic value) {
+      final result = _asString(value)?.trim();
+      return result == null || result.isEmpty ? null : result;
+    }
+
     final rawUi = json['ui_meta'];
     final ui = rawUi is Map ? rawUi['hermes-bots'] : null;
     final meta = ui is Map
@@ -880,17 +910,25 @@ class HermesBotProfile {
             rawLast.map((key, value) => MapEntry('$key', value)),
           )
         : null;
-
-    int? integer(dynamic value) {
-      if (value is int) return value;
-      if (value is num) return value.toInt();
-      return int.tryParse('${value ?? ''}');
-    }
-
-    String? text(dynamic value) {
-      final result = _asString(value)?.trim();
-      return result == null || result.isEmpty ? null : result;
-    }
+    final rawCanonical = json['canonical_session'];
+    final canonicalMap = rawCanonical is Map
+        ? rawCanonical.map((key, value) => MapEntry('$key', value))
+        : const <String, dynamic>{};
+    final canonicalResolvedId = text(canonicalMap['resolved_id']);
+    final canonicalRegistryId = text(canonicalMap['id']);
+    final canonical = canonicalMap.isEmpty
+        ? null
+        : HermesSession.fromJson({
+            ...canonicalMap,
+            'id': canonicalResolvedId ?? canonicalRegistryId ?? '',
+            'title':
+                text(canonicalMap['title']) ??
+                text(canonicalMap['root_title']) ??
+                'Bot Chat',
+            'last_active':
+                canonicalMap['last_active'] ?? canonicalMap['started_at'],
+            'model': json['model'],
+          });
 
     final rawGroups = meta['groups'];
     final hasCanonicalGroups = rawGroups is List;
@@ -913,15 +951,22 @@ class HermesBotProfile {
       isDefault: json['is_default'] == true,
       hasAvatar: json['has_avatar'] == true,
       lastSession: last,
+      canonicalSession: canonical,
+      canonicalRegistryId: canonicalRegistryId,
       title: text(meta['title']),
       color: text(meta['color']),
       shape: text(meta['shape']),
       imageKind: text(meta['imageKind']),
       group: groups.isEmpty ? null : groups.first,
       groups: List.unmodifiable(groups),
-      chatSessionId: text(meta['chat']),
+      // Modern gateways resolve the canonical Bot Chat by title and return
+      // both its registry root and compression tip. The ui_meta pointer is a
+      // legacy fallback only; Desktop deliberately ignores and removes it.
+      chatSessionId:
+          canonicalResolvedId ?? canonicalRegistryId ?? text(meta['chat']),
       createdAt: integer(meta['created']),
       pinned: meta['pinned'] == true,
+      hidden: meta['hidden'] == true,
       raw: Map<String, dynamic>.from(json),
     );
   }
@@ -929,12 +974,20 @@ class HermesBotProfile {
 
 /// Feature-detected Bot Mode roster returned by the gateway.
 class HermesBotRoster {
-  const HermesBotRoster({required this.available, this.profiles = const []});
+  const HermesBotRoster({
+    required this.available,
+    this.profiles = const [],
+    this.hiddenProfiles = const [],
+  });
 
-  const HermesBotRoster.unavailable() : available = false, profiles = const [];
+  const HermesBotRoster.unavailable()
+    : available = false,
+      profiles = const [],
+      hiddenProfiles = const [];
 
   final bool available;
   final List<HermesBotProfile> profiles;
+  final List<HermesBotProfile> hiddenProfiles;
 
   factory HermesBotRoster.fromServer(
     Map<String, dynamic> profilePayload, {
@@ -958,7 +1011,7 @@ class HermesBotRoster {
         pluginAvailable;
 
     final rawProfiles = profilePayload['profiles'];
-    final profiles = rawProfiles is List
+    final allProfiles = rawProfiles is List
         ? rawProfiles
               .whereType<Map>()
               .map(
@@ -973,13 +1026,22 @@ class HermesBotRoster {
               .toList(growable: false)
         : const <HermesBotProfile>[];
 
-    profiles.sort((a, b) {
+    allProfiles.sort((a, b) {
       if (a.pinned != b.pinned) return a.pinned ? -1 : 1;
       return b.activityMillis.compareTo(a.activityMillis);
     });
     return HermesBotRoster(
       available: available,
-      profiles: available ? profiles : const [],
+      profiles: available
+          ? allProfiles
+                .where((profile) => !profile.hidden)
+                .toList(growable: false)
+          : const [],
+      hiddenProfiles: available
+          ? allProfiles
+                .where((profile) => profile.hidden)
+                .toList(growable: false)
+          : const [],
     );
   }
 }

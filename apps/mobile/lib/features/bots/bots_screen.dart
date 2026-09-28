@@ -103,7 +103,7 @@ class _BotsScreenState extends ConsumerState<BotsScreen> {
               Expanded(
                 child: RefreshIndicator(
                   onRefresh: () => ref.read(botsProvider.notifier).refresh(),
-                  child: view.profiles.isEmpty
+                  child: view.profiles.isEmpty && view.hiddenProfiles.isEmpty
                       ? CustomScrollView(
                           physics: const AlwaysScrollableScrollPhysics(),
                           slivers: [
@@ -127,6 +127,7 @@ class _BotsScreenState extends ConsumerState<BotsScreen> {
                         )
                       : _BotRosterList(
                           profiles: view.profiles,
+                          hiddenProfiles: view.hiddenProfiles,
                           groupRooms: view.groupRooms,
                         ),
                 ),
@@ -139,7 +140,8 @@ class _BotsScreenState extends ConsumerState<BotsScreen> {
   }
 
   Future<void> _createBot() async {
-    final existing = ref.read(botsProvider).value?.profiles ?? const [];
+    final view = ref.read(botsProvider).value;
+    final existing = [...?view?.profiles, ...?view?.hiddenProfiles];
     final created = await showCreateBotSheet(
       context,
       existingNames: {for (final bot in existing) bot.name},
@@ -195,9 +197,14 @@ List<BotGroupEntry> botGroupEntries(
 }
 
 class _BotRosterList extends StatelessWidget {
-  const _BotRosterList({required this.profiles, required this.groupRooms});
+  const _BotRosterList({
+    required this.profiles,
+    required this.hiddenProfiles,
+    required this.groupRooms,
+  });
 
   final List<HermesBotProfile> profiles;
+  final List<HermesBotProfile> hiddenProfiles;
   final Map<String, HermesBotGroupRoom> groupRooms;
 
   @override
@@ -217,6 +224,17 @@ class _BotRosterList extends StatelessWidget {
       for (var index = 0; index < groups.length; index++) {
         children.add(_BotGroupTile(entry: groups[index]));
         if (index < groups.length - 1) {
+          children.add(const Divider(height: 1, indent: 76));
+        }
+      }
+    }
+    if (hiddenProfiles.isNotEmpty) {
+      children.add(
+        _RosterHeading(label: 'Hidden bots', count: hiddenProfiles.length),
+      );
+      for (var index = 0; index < hiddenProfiles.length; index++) {
+        children.add(_BotTile(bot: hiddenProfiles[index]));
+        if (index < hiddenProfiles.length - 1) {
           children.add(const Divider(height: 1, indent: 76));
         }
       }
@@ -365,7 +383,7 @@ class _BotTile extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
-    final last = bot.lastSession;
+    final last = bot.activitySession;
     final relative = formatSessionRelative(last?.lastActive);
     final preview = last?.preview?.trim();
     final workingSessionIds =
@@ -416,6 +434,14 @@ class _BotTile extends ConsumerWidget {
             const SizedBox(width: 6),
             Icon(Icons.push_pin, size: 15, color: theme.colorScheme.primary),
           ],
+          if (bot.hidden) ...[
+            const SizedBox(width: 6),
+            Icon(
+              Icons.visibility_off_outlined,
+              size: 16,
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
+            ),
+          ],
         ],
       ),
       subtitle: Column(
@@ -448,6 +474,8 @@ class _BotTile extends ConsumerWidget {
               switch (action) {
                 case 'pin':
                   unawaited(_toggleBotPin(context, ref, bot));
+                case 'hidden':
+                  unawaited(_toggleBotHidden(context, ref, bot));
                 case 'cronjobs':
                   unawaited(showBotCronjobsSheet(context, bot: bot));
                 case 'edit':
@@ -466,6 +494,18 @@ class _BotTile extends ConsumerWidget {
                     bot.pinned ? Icons.push_pin : Icons.push_pin_outlined,
                   ),
                   title: Text(bot.pinned ? 'Unpin' : 'Pin to top'),
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
+              PopupMenuItem(
+                value: 'hidden',
+                child: ListTile(
+                  leading: Icon(
+                    bot.hidden
+                        ? Icons.visibility_outlined
+                        : Icons.visibility_off_outlined,
+                  ),
+                  title: Text(bot.hidden ? 'Show in bot list' : 'Hide bot'),
                   contentPadding: EdgeInsets.zero,
                 ),
               ),
@@ -523,6 +563,24 @@ class _BotTile extends ConsumerWidget {
         ],
       ),
     );
+  }
+}
+
+Future<void> _toggleBotHidden(
+  BuildContext context,
+  WidgetRef ref,
+  HermesBotProfile bot,
+) async {
+  try {
+    final sync = ref.read(sessionSyncProvider);
+    if (sync == null) throw StateError('Gateway is not connected');
+    await sync.updateBotHidden(bot, !bot.hidden);
+    await ref.read(botsProvider.notifier).refresh();
+  } catch (error) {
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('$error')));
   }
 }
 
