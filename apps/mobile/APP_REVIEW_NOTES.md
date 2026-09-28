@@ -45,13 +45,12 @@ lists them and opens a chat against one.
 
 APPLE HEALTH
 
-Hermes Go clearly identifies this feature as "Apple Health (HealthKit)" on the
-initial connection screen and in Settings. It is off by default and opt-in.
+Hermes Go clearly identifies this feature as "Apple Health" on the initial
+connection screen and in Settings. It is off by default and opt-in.
 Tap the Apple Health card on the first screen for the full in-app disclosure.
-After entering the sample workspace, open Settings, then Apple Health
-(HealthKit), to see the same disclosure and the sync controls. This row is
-visible in the sample workspace even though sample data never leaves the
-device.
+After entering the sample workspace, open Settings, then Apple Health, to see
+the same disclosure and the sync controls. This row is visible in the sample
+workspace even though sample data never leaves the device.
 
 When the user turns sync on for a real gateway, iOS shows the standard Health
 permission sheet and the user chooses which categories to allow. The app only
@@ -225,19 +224,19 @@ the bracketed App Store Connect screenshot confirmation before sending.
 Thank you for identifying both issues. I addressed them in build 40.
 
 Guideline 2.5.1:
-Hermes Go now clearly identifies its optional Apple Health functionality as
-"Apple Health (HealthKit)" directly on the initial connection screen, before
-sign-in, and again in Settings. Tapping either entry explains that the feature
-uses Apple's HealthKit API, is off by default, reads only categories the user
-explicitly authorizes, sends those samples only to the user's authenticated
-self-hosted Hermes gateway, never writes to Apple Health, and does not use
-CareKit.
+Hermes Go now clearly identifies its optional integration as "Apple Health"
+directly on the initial connection screen, before sign-in, and again in
+Settings. Tapping either entry explains that the feature works with the Apple
+Health app, is off by default, reads only categories the user explicitly
+authorizes, sends those samples only to the user's authenticated self-hosted
+Hermes gateway, and never writes to the Apple Health app. The implementation
+uses HealthKit and does not use CareKit.
 
 The attached recording was captured on a physical iPhone. It shows:
-1. Launching Hermes Go and tapping Apple Health (HealthKit) on the first screen.
-2. The complete HealthKit disclosure.
+1. Launching Hermes Go and tapping Apple Health on the first screen.
+2. The complete Apple Health disclosure.
 3. Entering the built-in sample workspace using demo.hermes.go / demo / demo.
-4. Opening Settings, then Apple Health (HealthKit), where the disclosure and
+4. Opening Settings, then Apple Health, where the disclosure and
    sync controls are clearly visible.
 
 Guideline 2.3.3:
@@ -248,6 +247,16 @@ promotional images that did not depict the application UI.]
 Thank you,
 Tom
 <!-- END HEALTHKIT SCREENSHOT REPLY BLOCK -->
+
+### App Store description insertion for build 40
+
+Add this under WHAT YOU CAN DO so the marketing text also identifies the
+integration, as required by Guideline 2.5.1:
+
+• On iPhone and iPad, optionally sync health data you authorize from the Apple
+Health app to your authenticated, self-hosted gateway for bounded bot summaries.
+Hermes Go reads only, never writes to the Apple Health app, and the feature is
+off by default.
 
 ---
 

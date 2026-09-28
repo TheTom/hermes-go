@@ -333,9 +333,9 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
                             Icons.favorite_outline,
                             color: theme.colorScheme.primary,
                           ),
-                          title: const Text('Apple Health (HealthKit)'),
+                          title: const Text('Apple Health'),
                           subtitle: const Text(
-                            'Optional, read-only health sync for your private gateway. You choose which data to share.',
+                            'Works with the Apple Health app. Optional and read-only; you choose what to share.',
                           ),
                           trailing: const Icon(Icons.info_outline),
                           onTap: () => _showAppleHealthDisclosure(context),
@@ -506,7 +506,7 @@ Future<void> _showAppleHealthDisclosure(BuildContext context) {
       title: const Text('Apple Health in Hermes Go'),
       content: const SingleChildScrollView(
         child: Text(
-          'Hermes Go uses Apple’s HealthKit API on iPhone and iPad. The feature is off by default. If you enable it in Settings, iOS asks you to choose which Apple Health categories Hermes Go may read, such as activity, sleep, heart, and body measurements.\n\nThe app sends only the samples you authorize to your authenticated, self-hosted Hermes gateway so Apple Health-capable bots can answer bounded summary questions. Hermes Go never writes to Apple Health and does not use CareKit. You can turn sync off or delete the gateway copy at any time.',
+          'Hermes Go works with the Apple Health app on iPhone and iPad. The feature is off by default. If you enable it in Settings, iOS asks you to choose which health categories Hermes Go may read, such as activity, sleep, heart, and body measurements.\n\nThe app sends only the samples you authorize to your authenticated, self-hosted Hermes gateway so health-capable bots can answer bounded summary questions. Hermes Go never writes to the Apple Health app. You can turn sync off or delete the gateway copy at any time.',
         ),
       ),
       actions: [

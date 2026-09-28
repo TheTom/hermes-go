@@ -267,9 +267,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           if (Platform.isIOS && profile != null)
             ListTile(
               leading: const Icon(Icons.favorite_outline),
-              title: const Text('Apple Health (HealthKit)'),
+              title: const Text('Apple Health'),
               subtitle: const Text(
-                'Optional read-only sync · you choose what to share',
+                'Works with the Apple Health app · optional and read-only',
               ),
               trailing: const Icon(Icons.chevron_right),
               onTap: () => _showAppleHealthSettings(profile.id),
@@ -452,12 +452,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Text(
-                      'Apple Health (HealthKit)',
+                      'Apple Health',
                       style: Theme.of(sheetContext).textTheme.headlineSmall,
                     ),
                     const SizedBox(height: 8),
                     const Text(
-                      'Hermes Go uses Apple’s HealthKit API and does not use CareKit. It reads data only after your permission and sends authorized samples to this authenticated, self-hosted Hermes gateway. Bots with the Apple Health capability can query bounded summaries; health data is never added to every chat prompt. Hermes Go never writes to Apple Health.',
+                      'Hermes Go works with the Apple Health app. It reads health data only after your permission and sends authorized samples to this authenticated, self-hosted Hermes gateway. Health-capable bots can query bounded summaries; health data is never added to every chat prompt. Hermes Go never writes to the Apple Health app.',
                     ),
                     const SizedBox(height: 12),
                     SwitchListTile.adaptive(
@@ -512,7 +512,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         child: Padding(
                           padding: const EdgeInsets.all(12),
                           child: Text(
-                            'No ${missingCategories.join(', ')} samples have reached Hermes${lastReadCounts.isEmpty ? '.' : ' in the last phone read.'} Existing access must be changed in Health → Sharing → Apps → Hermes Go. HealthKit may also return zero when your phone has no samples of that type.',
+                            'No ${missingCategories.join(', ')} samples have reached Hermes${lastReadCounts.isEmpty ? '.' : ' in the last phone read.'} Existing access must be changed in Health → Sharing → Apps → Hermes Go. The Apple Health app may also have no samples of that type.',
                             style: TextStyle(
                               color: Theme.of(
                                 sheetContext,
@@ -542,7 +542,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                 initial: missingCategories.isNotEmpty,
                               );
                               message = result.sleepRead == 0
-                                  ? 'Synced ${result.accepted} samples, but HealthKit returned no sleep data. In Health, open Sharing → Apps → Hermes Go and change Sleep to Full Access.'
+                                  ? 'Synced ${result.accepted} samples, but the Apple Health app returned no sleep data. In Health, open Sharing → Apps → Hermes Go and change Sleep to Full Access.'
                                   : 'Synced ${result.accepted} new or updated samples, including ${result.sleepRead} sleep samples';
                             }),
                       icon: busy
@@ -561,8 +561,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                 final accepted = await health
                                     .requestReadAuthorization();
                                 message = accepted
-                                    ? 'HealthKit processed the access request.'
-                                    : 'HealthKit could not process the access request.';
+                                    ? 'Apple Health processed the access request.'
+                                    : 'Apple Health could not process the access request.';
                               });
                               if (!sheetContext.mounted) return;
                               await showDialog<void>(
@@ -570,7 +570,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                 builder: (dialogContext) => AlertDialog(
                                   title: const Text('Change Health access'),
                                   content: const Text(
-                                    'If no Apple permission sheet appeared, HealthKit has already recorded a choice for every requested data type. iOS will not show those existing choices again here.\n\nOpen the Health app, then go to Sharing → Apps → Hermes Go. Change any item showing None—including Sleep, Weight, Heart, and Vitals—to Full Access. Return here and tap Sync now to backfill the last 30 days.',
+                                    'If no Apple permission sheet appeared, iOS has already recorded a choice for every requested data type and will not show those existing choices again here.\n\nOpen the Health app, then go to Sharing → Apps → Hermes Go. Change any item showing None—including Sleep, Weight, Heart, and Vitals—to Full Access. Return here and tap Sync now to backfill the last 30 days.',
                                   ),
                                   actions: [
                                     FilledButton(
