@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'dart:convert';
 
 import 'package:hermes_mobile/core/models/hermes_models.dart';
 import 'package:hermes_mobile/features/sessions/tool_message_card.dart';
@@ -33,6 +34,56 @@ void main() {
 
     expect(presentation.title, 'Weather lookup');
     expect(presentation.summary, 'Austin, TX');
+  });
+
+  test('generated image parser prefers the gateway-deliverable host path', () {
+    final message = _tool(
+      'image_generate',
+      context: jsonEncode({
+        'success': true,
+        'host_image': '/home/me/.hermes/cache/images/cat.png',
+        'image': 'https://images.example/cat.png',
+      }),
+    );
+
+    expect(
+      generatedImageSource(message),
+      '/home/me/.hermes/cache/images/cat.png',
+    );
+    expect(presentToolMessage(message).title, 'Generated image');
+  });
+
+  testWidgets('generated image is resolved through the supplied media loader', (
+    tester,
+  ) async {
+    const onePixelPng =
+        'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJ'
+        'AAAADUlEQVR42mNk+M/wHwAF/gL+AvzZAAAAAElFTkSuQmCC';
+    String? requested;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ToolMessageContent(
+            message: _tool(
+              'image_generate',
+              context: jsonEncode({
+                'success': true,
+                'host_image': '/home/me/.hermes/cache/images/cat.png',
+              }),
+            ),
+            loadGeneratedImage: (source) async {
+              requested = source;
+              return onePixelPng;
+            },
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(requested, '/home/me/.hermes/cache/images/cat.png');
+    expect(find.byType(Image), findsOneWidget);
+    expect(find.byKey(const ValueKey('generated-image')), findsOneWidget);
   });
 
   testWidgets('tool details expand when the activity is tapped', (

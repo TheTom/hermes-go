@@ -2724,6 +2724,33 @@ def test_history_to_messages_preserves_tool_calls_for_resume_display():
     ]
 
 
+def test_history_to_messages_preserves_generated_image_result_for_remote_clients():
+    result = json.dumps({
+        "success": True,
+        "host_image": "/home/me/.hermes/cache/images/cat.png",
+        "image": "https://images.example/cat.png",
+    })
+    history = [
+        {
+            "role": "assistant",
+            "content": "",
+            "tool_calls": [{
+                "id": "image-1",
+                "function": {"name": "image_generate", "arguments": '{"prompt":"cat"}'},
+            }],
+        },
+        {"role": "tool", "content": result, "tool_call_id": "image-1"},
+    ]
+
+    assert server._history_to_messages(history) == [{
+        "role": "tool",
+        "name": "image_generate",
+        "context": "cat",
+        "content": result,
+        "tool_call_id": "image-1",
+        "args": {"prompt": "cat"},
+    }]
+
 def test_history_to_messages_types_the_failed_turn_boundary_for_resume():
     """Desktop keys the failed-turn boundary on ``display_kind`` (a room poller must not post it
     as the member's reply); rows written before the closer typed it are typed on read."""

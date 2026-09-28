@@ -2227,6 +2227,7 @@ class SessionChatScreenState extends ConsumerState<SessionChatScreen> {
                           final apiError = _isApiErrorMessage(msg);
                           return _MessageBubble(
                             message: msg,
+                            loadGeneratedImage: _loadGeneratedImage,
                             knownArtifactPaths: artifactPaths,
                             unanswered: unanswered,
                             showRetryActions: unanswered || apiError,
@@ -2387,6 +2388,18 @@ class SessionChatScreenState extends ConsumerState<SessionChatScreen> {
         ],
       ),
       body: body,
+    );
+  }
+
+  Future<String> _loadGeneratedImage(String source) async {
+    final profile = ref.read(connectionProfileProvider).value;
+    if (profile == null) {
+      throw StateError('No active gateway connection');
+    }
+    return DashboardClient(profile: profile).readGeneratedImage(
+      source,
+      profileName: widget.profileName,
+      sessionId: _session.id,
     );
   }
 }
@@ -2653,6 +2666,7 @@ class _ThinkingBubbleState extends State<_ThinkingBubble>
 class _MessageBubble extends StatelessWidget {
   const _MessageBubble({
     required this.message,
+    this.loadGeneratedImage,
     this.knownArtifactPaths = SessionArtifactPaths.empty,
     this.onLongPress,
     this.onResend,
@@ -2662,6 +2676,7 @@ class _MessageBubble extends StatelessWidget {
   });
 
   final HermesMessage message;
+  final GeneratedImageLoader? loadGeneratedImage;
 
   /// Session-wide artifact paths, computed once per transcript change by the
   /// screen — a bubble must not rebuild it, it rebuilds on every token.
@@ -2774,7 +2789,10 @@ class _MessageBubble extends StatelessWidget {
                   ),
                 ),
               if (isTool)
-                ToolMessageContent(message: message)
+                ToolMessageContent(
+                  message: message,
+                  loadGeneratedImage: loadGeneratedImage,
+                )
               else if (message.toolName != null)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 4),

@@ -651,6 +651,52 @@ class DashboardClient {
     final body = (res.data as Map).cast<String, dynamic>();
     return ManagedFileContent.fromJson(body);
   }
+
+  /// Resolves a gateway-local generated image for a remote phone.
+  ///
+  /// `image_generate` returns a path on the Hermes host. That path is useful
+  /// to Desktop but cannot be opened directly by iOS/Android, so the phone
+  /// asks the authenticated filesystem bridge for a data URL. This matches
+  /// current Desktop remote mode: plugin providers are allowed to place an
+  /// image outside the narrow `/api/media` roots, while `profile` +
+  /// `session_id` still make the gateway validate the owning session before
+  /// reading the path. Keeping this request on [DashboardClient] also ensures
+  /// the host path is never exposed to an unauthenticated browser/WebView.
+  Future<String> readGeneratedImage(
+    String path, {
+    String? profileName,
+    String? sessionId,
+  }) async {
+    lastError = null;
+    final dio = await _ensureDio();
+    final res = await dio.get<dynamic>(
+      '/api/fs/read-data-url',
+      queryParameters: {
+        'path': path,
+        if (profileName?.trim().isNotEmpty == true)
+          'profile': profileName!.trim(),
+        if (sessionId?.trim().isNotEmpty == true)
+          'session_id': sessionId!.trim(),
+      },
+    );
+    _throwIfAuth(res);
+    final status = res.statusCode ?? 0;
+    if (status != 200 || res.data is! Map) {
+      lastError = 'readGeneratedImage HTTP $status: ${res.data}';
+      throw DioException(
+        requestOptions: res.requestOptions,
+        response: res,
+        message: lastError,
+      );
+    }
+    final body = (res.data as Map).cast<String, dynamic>();
+    final dataUrl = '${body['dataUrl'] ?? body['data_url'] ?? ''}'.trim();
+    if (!dataUrl.startsWith('data:image/')) {
+      lastError = 'readGeneratedImage: gateway returned invalid image data';
+      throw FormatException(lastError!);
+    }
+    return dataUrl;
+  }
 }
 
 /// Result of `GET /api/files/read` — bytes always arrive base64-encoded

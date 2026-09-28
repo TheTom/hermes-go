@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 
@@ -14,6 +15,40 @@ class ToolMessagePresentation {
   final String title;
   final String summary;
   final String? details;
+}
+
+typedef GeneratedImageLoader = Future<String> Function(String source);
+
+/// Desktop-compatible display source for a completed `image_generate` tool.
+/// The host path wins because it is the path the authenticated filesystem
+/// bridge can serve; `image` remains the fallback for local and URL-returning
+/// providers.
+String? generatedImageSource(HermesMessage message) {
+  if (message.toolName != 'image_generate') return null;
+  final raw = message.content?.trim() ?? '';
+  if (raw.isEmpty) return null;
+  try {
+    final decoded = jsonDecode(raw);
+    if (decoded is! Map || decoded['success'] == false) return null;
+    for (final key in const ['host_image', 'image']) {
+      final value = decoded[key];
+      if (value is String && value.trim().isNotEmpty) return value.trim();
+    }
+  } catch (_) {
+    return null;
+  }
+  return null;
+}
+
+Uint8List? _imageBytesFromDataUrl(String source) {
+  if (!source.startsWith('data:image/') || !source.contains(';base64,')) {
+    return null;
+  }
+  try {
+    return base64Decode(source.substring(source.indexOf(',') + 1));
+  } catch (_) {
+    return null;
+  }
 }
 
 Map<String, dynamic> _toolArguments(dynamic toolCalls) {
@@ -83,6 +118,12 @@ ToolMessagePresentation presentToolMessage(HermesMessage message) {
           : (context.isNotEmpty
                 ? 'Read $context'
                 : 'Read an Apple Health summary');
+    case 'image_generate':
+      title = 'Generated image';
+      final prompt = _textArg(args, 'prompt');
+      summary = prompt.isNotEmpty
+          ? 'Created an image for ${_quoted(prompt)}'
+          : 'Created an image';
     default:
       title = _friendlyToolName(name);
       summary = context.isNotEmpty ? context : 'Completed tool call';
@@ -105,9 +146,14 @@ ToolMessagePresentation presentToolMessage(HermesMessage message) {
 }
 
 class ToolMessageContent extends StatefulWidget {
-  const ToolMessageContent({super.key, required this.message});
+  const ToolMessageContent({
+    super.key,
+    required this.message,
+    this.loadGeneratedImage,
+  });
 
   final HermesMessage message;
+  final GeneratedImageLoader? loadGeneratedImage;
 
   @override
   State<ToolMessageContent> createState() => _ToolMessageContentState();
@@ -115,6 +161,90 @@ class ToolMessageContent extends StatefulWidget {
 
 class _ToolMessageContentState extends State<ToolMessageContent> {
   bool _expanded = false;
+  Future<String>? _generatedImage;
+
+  @override
+  void initState() {
+    super.initState();
+    _prepareGeneratedImage();
+  }
+
+  @override
+  void didUpdateWidget(covariant ToolMessageContent oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.message.content != widget.message.content ||
+        oldWidget.message.toolName != widget.message.toolName ||
+        oldWidget.loadGeneratedImage != widget.loadGeneratedImage) {
+      _prepareGeneratedImage();
+    }
+  }
+
+  void _prepareGeneratedImage() {
+    final source = generatedImageSource(widget.message);
+    if (source == null) {
+      _generatedImage = null;
+      return;
+    }
+    final uri = Uri.tryParse(source);
+    if (source.startsWith('data:image/') ||
+        uri?.scheme == 'http' ||
+        uri?.scheme == 'https') {
+      _generatedImage = Future.value(source);
+      return;
+    }
+    final loader = widget.loadGeneratedImage;
+    _generatedImage = loader == null
+        ? Future<String>.error(StateError('No gateway media loader'))
+        : loader(source);
+  }
+
+  Widget _image(BuildContext context, String source) {
+    final bytes = _imageBytesFromDataUrl(source);
+    Widget image() => bytes != null
+        ? Image.memory(bytes, fit: BoxFit.contain, gaplessPlayback: true)
+        : Image.network(source, fit: BoxFit.contain, gaplessPlayback: true);
+    return Semantics(
+      key: const ValueKey('generated-image'),
+      label: 'Generated image',
+      button: true,
+      child: InkWell(
+        onTap: () => showDialog<void>(
+          context: context,
+          builder: (dialogContext) => Dialog(
+            backgroundColor: Colors.black,
+            insetPadding: const EdgeInsets.all(12),
+            child: Stack(
+              children: [
+                Center(
+                  child: InteractiveViewer(
+                    minScale: 0.5,
+                    maxScale: 5,
+                    child: image(),
+                  ),
+                ),
+                Positioned(
+                  right: 8,
+                  top: 8,
+                  child: IconButton.filledTonal(
+                    onPressed: () => Navigator.pop(dialogContext),
+                    icon: const Icon(Icons.close),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        borderRadius: BorderRadius.circular(14),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(14),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxHeight: 420),
+            child: image(),
+          ),
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -197,6 +327,30 @@ class _ToolMessageContentState extends State<ToolMessageContent> {
           duration: const Duration(milliseconds: 160),
           sizeCurve: Curves.easeOut,
         ),
+        if (_generatedImage != null) ...[
+          const SizedBox(height: 10),
+          FutureBuilder<String>(
+            future: _generatedImage,
+            builder: (context, snapshot) {
+              if (snapshot.connectionState != ConnectionState.done) {
+                return const SizedBox(
+                  height: 120,
+                  child: Center(child: CircularProgressIndicator()),
+                );
+              }
+              final source = snapshot.data;
+              if (snapshot.hasError || source == null || source.isEmpty) {
+                return Text(
+                  'Generated image is unavailable on this device.',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.error,
+                  ),
+                );
+              }
+              return _image(context, source);
+            },
+          ),
+        ],
       ],
     );
   }
