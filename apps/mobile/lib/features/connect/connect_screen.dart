@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
@@ -323,6 +324,24 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
                         ),
                       ),
                     ),
+                    if (Platform.isIOS) ...[
+                      const SizedBox(height: 16),
+                      Card(
+                        margin: EdgeInsets.zero,
+                        child: ListTile(
+                          leading: Icon(
+                            Icons.favorite_outline,
+                            color: theme.colorScheme.primary,
+                          ),
+                          title: const Text('Apple Health (HealthKit)'),
+                          subtitle: const Text(
+                            'Optional, read-only health sync for your private gateway. You choose which data to share.',
+                          ),
+                          trailing: const Icon(Icons.info_outline),
+                          onTap: () => _showAppleHealthDisclosure(context),
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 28),
                     TextFormField(
                       controller: _urlCtrl,
@@ -477,4 +496,25 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
       ),
     );
   }
+}
+
+Future<void> _showAppleHealthDisclosure(BuildContext context) {
+  return showDialog<void>(
+    context: context,
+    builder: (dialogContext) => AlertDialog(
+      icon: const Icon(Icons.favorite_outline),
+      title: const Text('Apple Health in Hermes Go'),
+      content: const SingleChildScrollView(
+        child: Text(
+          'Hermes Go uses Apple’s HealthKit API on iPhone and iPad. The feature is off by default. If you enable it in Settings, iOS asks you to choose which Apple Health categories Hermes Go may read, such as activity, sleep, heart, and body measurements.\n\nThe app sends only the samples you authorize to your authenticated, self-hosted Hermes gateway so Apple Health-capable bots can answer bounded summary questions. Hermes Go never writes to Apple Health and does not use CareKit. You can turn sync off or delete the gateway copy at any time.',
+        ),
+      ),
+      actions: [
+        FilledButton(
+          onPressed: () => Navigator.pop(dialogContext),
+          child: const Text('Done'),
+        ),
+      ],
+    ),
+  );
 }

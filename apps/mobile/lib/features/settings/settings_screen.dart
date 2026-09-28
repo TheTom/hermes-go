@@ -264,11 +264,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               setState(() {});
             },
           ),
-          if (Platform.isIOS && profile != null && !isDemoProfileId(profile.id))
+          if (Platform.isIOS && profile != null)
             ListTile(
               leading: const Icon(Icons.favorite_outline),
-              title: const Text('Apple Health'),
-              subtitle: const Text('Private sync and bot capability access'),
+              title: const Text('Apple Health (HealthKit)'),
+              subtitle: const Text(
+                'Optional read-only sync · you choose what to share',
+              ),
               trailing: const Icon(Icons.chevron_right),
               onTap: () => _showAppleHealthSettings(profile.id),
             ),
@@ -450,12 +452,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Text(
-                      'Apple Health',
+                      'Apple Health (HealthKit)',
                       style: Theme.of(sheetContext).textTheme.headlineSmall,
                     ),
                     const SizedBox(height: 8),
                     const Text(
-                      'Hermes Go reads HealthKit only after your permission and sends samples to this authenticated Hermes gateway. Bots with the Apple Health capability can query bounded summaries; health data is never added to every chat prompt.',
+                      'Hermes Go uses Apple’s HealthKit API and does not use CareKit. It reads data only after your permission and sends authorized samples to this authenticated, self-hosted Hermes gateway. Bots with the Apple Health capability can query bounded summaries; health data is never added to every chat prompt. Hermes Go never writes to Apple Health.',
                     ),
                     const SizedBox(height: 12),
                     SwitchListTile.adaptive(
