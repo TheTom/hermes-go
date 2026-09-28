@@ -457,7 +457,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     ),
                     const SizedBox(height: 8),
                     const Text(
-                      'Hermes Go works with the Apple Health app. It reads health data only after your permission and sends authorized samples to this authenticated, self-hosted Hermes gateway. Health-capable bots can query bounded summaries; health data is never added to every chat prompt. Hermes Go never writes to the Apple Health app.',
+                      'Hermes Go works with the Apple Health app. It reads health data only after your permission and sends authorized samples to this authenticated, self-hosted Hermes gateway. Health-capable bots can query bounded summaries; the gateway may send a requested summary to the model provider you configured. Health data is never added to every chat prompt, and Hermes Go never writes to the Apple Health app. Turning sync off stops future uploads; deleting the gateway copy is a separate action below.',
                     ),
                     const SizedBox(height: 12),
                     SwitchListTile.adaptive(

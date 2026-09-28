@@ -15734,6 +15734,25 @@ def test_infer_profile_for_session_id_recovers_unique_profile(monkeypatch, tmp_p
     assert set(closed) == {coach_home / "state.db", other_home / "state.db"}
 
 
+def test_resume_context_uses_inferred_profile_when_client_scope_is_missing(
+    monkeypatch, tmp_path
+):
+    coach_home = tmp_path / "profiles" / "coach"
+    monkeypatch.setattr(server, "_profile_home", lambda _profile: None)
+    monkeypatch.setattr(
+        server,
+        "_infer_profile_for_session_id",
+        lambda session_id: ("coach", coach_home)
+        if session_id == "bot-chat-1"
+        else None,
+    )
+
+    ctx = server._Resume("request-1", {}, "bot-chat-1")
+
+    assert ctx.profile == "coach"
+    assert ctx.profile_home == coach_home
+
+
 def test_session_list_honors_params_profile_opens_profile_db(monkeypatch, tmp_path):
     """Issue #62503: session.list must read the profile's state.db, not launch."""
     profile_home = tmp_path / "profiles" / "mlperf"

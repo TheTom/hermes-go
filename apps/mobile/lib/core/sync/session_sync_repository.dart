@@ -140,6 +140,22 @@ class SessionSyncRepository {
   final Map<String, String> _liveByStored = {};
   final Map<String, String> _storedByLive = {};
   final Map<String, String> _profileBySession = {};
+  final Set<String> _canonicalBotChatIds = {};
+
+  void _registerCanonicalBotChat({required String storedId, String? liveId}) {
+    final stored = storedId.trim();
+    final live = liveId?.trim();
+    if (stored.isNotEmpty) _canonicalBotChatIds.add(stored);
+    if (live != null && live.isNotEmpty) _canonicalBotChatIds.add(live);
+  }
+
+  bool _isCanonicalBotChatId(String sessionId) {
+    final id = sessionId.trim();
+    if (id.isEmpty) return false;
+    return _canonicalBotChatIds.contains(id) ||
+        _canonicalBotChatIds.contains(_liveByStored[id]) ||
+        _canonicalBotChatIds.contains(_storedByLive[id]);
+  }
 
   /// Bind a durable bot-chat id to its owning server profile. Profile-scoped
   /// sessions live in a different state.db from ordinary mobile chats, so
@@ -1102,19 +1118,13 @@ class SessionSyncRepository {
       if (liveId.isEmpty) throw StateError('Gateway could not resume Bot Chat');
       registerSessionProfile(stored.id, profile);
       _registerLiveMapping(storedId: stored.id, liveId: liveId);
+      _registerCanonicalBotChat(storedId: stored.id, liveId: liveId);
       return stored;
     }
 
-    // Current gateways resolve the forever-chat by its exact title and expose
-    // both the durable registry id and the compression-lineage tip. Trust that
-    // server-owned identity first; the old ui_meta `chat` pointer is retired.
-    final canonical = bot.canonicalSession;
-    if (canonical != null && canonical.id.trim().isNotEmpty) {
-      return (session: await resume(canonical), created: false);
-    }
-
-    // Exact, hidden lookup matches Desktop and remains compatible with a
-    // gateway that supports canonical Bot Chats but predates the rich roster.
+    // Match Desktop on every explicit bot open: resolve the forever-chat from
+    // the profile registry by its exact title. Roster payloads and the retired
+    // ui_meta `chat` pointer are snapshots and must never choose identity.
     final listed = await gatewayRequest('session.list', {
       'profile': profile,
       'title': 'Bot Chat',
@@ -1142,27 +1152,6 @@ class SessionSyncRepository {
         'last_active': selected['last_active'] ?? selected['started_at'],
       });
       return (session: await resume(session), created: false);
-    }
-
-    final legacyPinned = bot.chatSessionId?.trim();
-    if (legacyPinned != null && legacyPinned.isNotEmpty) {
-      final last = bot.activitySession;
-      final now = DateTime.now().toUtc().toIso8601String();
-      try {
-        final session = HermesSession(
-          id: legacyPinned,
-          source: last?.source ?? 'mobile',
-          model: bot.model ?? last?.model,
-          title: last?.title ?? 'Bot Chat',
-          startedAt: last?.startedAt ?? now,
-          lastActive: last?.lastActive ?? now,
-          messageCount: last?.messageCount ?? 0,
-          preview: last?.preview,
-        );
-        return (session: await resume(session), created: false);
-      } catch (error) {
-        debugPrint('Legacy Bot Chat pointer is not resumable: $error');
-      }
     }
 
     final created = await _createSessionOnGateway(
@@ -1204,6 +1193,10 @@ class SessionSyncRepository {
         rethrow;
       }
     }
+    _registerCanonicalBotChat(
+      storedId: created.id,
+      liveId: _liveByStored[created.id],
+    );
     return (session: created, created: true);
   }
 
@@ -1833,6 +1826,15 @@ class SessionSyncRepository {
     // Optimistic local title for snappy drawer.
     final local = await loadSessionsLocal();
     final existing = local.where((s) => s.id == sessionId).firstOrNull;
+    final profile = _profileForSession(sessionId);
+    if (profile != null &&
+        (_isCanonicalBotChatId(sessionId) ||
+            existing?.title?.trim() == 'Bot Chat')) {
+      throw StateError(
+        'Bot Chat is the bot’s canonical conversation and cannot be renamed. '
+        'Create another bot session to use a custom title.',
+      );
+    }
     if (existing != null) {
       await _db.upsertSession(
         _sessionToCompanion(

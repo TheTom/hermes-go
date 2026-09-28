@@ -1935,6 +1935,34 @@ def _load_enabled_toolsets(platform: str | None = None) -> list[str] | None:
     session_platform = platform or _resolve_session_platform()
     explicit = [item.strip() for item in os.environ.get("HERMES_TUI_TOOLSETS", "").split(",") if item.strip()]
     fallback_notice = None
+    # Bot/profile capability editors persist their authoritative selection at
+    # ``tools.enabled_toolsets``.  Resolve that pin before coding posture: a
+    # bot opened while its workspace happens to be a repository must keep the
+    # capabilities selected for that profile instead of silently collapsing to
+    # the generic coding set.  The environment pin above remains the operator
+    # override and therefore wins when present.
+    if not explicit:
+        try:
+            from hermes_cli.config import load_config
+            from hermes_cli.plugins import discover_plugins
+            from hermes_cli.tools_config import enabled_mcp_server_names
+
+            cfg = load_config()
+            tools_cfg = cfg.get("tools") if isinstance(cfg, dict) else None
+            pinned = tools_cfg.get("enabled_toolsets") if isinstance(tools_cfg, dict) else None
+            if isinstance(pinned, list) and pinned:
+                # Plugin toolsets are registry-backed, so load the active
+                # profile overlay before the agent snapshots its schemas.
+                discover_plugins()
+                selected = {str(name).strip() for name in pinned if str(name).strip()}
+                # MCP enablement is configured separately and rides alongside
+                # the profile's native/plugin capability pin.
+                selected.update(enabled_mcp_server_names(cfg))
+                return sorted(_with_session_toolsets(selected, session_platform))
+        except Exception:
+            # Older or partially configured profiles retain the established
+            # coding/config fallback below.
+            pass
     if not explicit:
         with contextlib.suppress(Exception):
             from agent.coding_context import coding_selection

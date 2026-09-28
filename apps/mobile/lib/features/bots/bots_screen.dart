@@ -671,6 +671,7 @@ Future<void> _openBotChat(
         builder: (routeContext) => buildBotChatScreen(
           session: target.session,
           profileName: bot.name,
+          isCanonicalBotChat: true,
           onOpenSessions: () => showBotSessionsSheet(routeContext, bot: bot),
         ),
       ),
@@ -689,11 +690,13 @@ Future<void> _openBotChat(
 SessionChatScreen buildBotChatScreen({
   required HermesSession session,
   required String profileName,
+  bool isCanonicalBotChat = false,
   VoidCallback? onOpenSessions,
 }) {
   return SessionChatScreen(
     session: session,
     profileName: profileName,
+    isCanonicalBotChat: isCanonicalBotChat,
     onOpenBotSessions: onOpenSessions,
   );
 }

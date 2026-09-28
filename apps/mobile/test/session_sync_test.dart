@@ -146,32 +146,89 @@ void main() {
     },
   );
 
-  test('a hidden pinned bot chat resumes instead of being recreated', () async {
-    final realtime = _BotRealtime(repo, hidePinnedFromList: true);
+  test(
+    'a stale hidden bot pointer is ignored when registry has no Bot Chat',
+    () async {
+      final realtime = _BotRealtime(repo, hidePinnedFromList: true);
+      repo.bindRealtime(realtime);
+      addTearDown(realtime.dispose);
+      final bot = HermesBotProfile.fromJson({
+        'name': 'coach',
+        'model': 'gpt-5.6-terra',
+        'provider': 'openai-codex',
+        'ui_meta': {
+          'hermes-bots': {'chat': 'bot-session', 'title': 'Fitness Coach'},
+        },
+      });
+
+      final target = await repo.openBotChat(bot);
+
+      expect(target.created, isTrue);
+      expect(target.session.id, 'fresh-health-chat');
+      expect(
+        realtime.calls.where(
+          (call) =>
+              call.method == 'session.resume' &&
+              call.params['session_id'] == 'bot-session',
+        ),
+        isEmpty,
+      );
+      expect(
+        realtime.calls
+            .singleWhere((call) => call.method == 'session.create')
+            .params,
+        containsPair('title', 'Bot Chat'),
+      );
+    },
+  );
+
+  test('canonical Bot Chat cannot be renamed', () async {
+    final realtime = _BotRealtime(repo);
     repo.bindRealtime(realtime);
     addTearDown(realtime.dispose);
     final bot = HermesBotProfile.fromJson({
       'name': 'coach',
-      'model': 'gpt-5.6-terra',
-      'provider': 'openai-codex',
       'ui_meta': {
-        'hermes-bots': {'chat': 'bot-session', 'title': 'Fitness Coach'},
+        'hermes-bots': {'title': 'Fitness Coach'},
       },
     });
 
     final target = await repo.openBotChat(bot);
 
-    expect(target.created, isFalse);
-    expect(target.session.id, 'bot-session');
+    await expectLater(
+      repo.renameSession(target.session.id, 'Weekly review'),
+      throwsA(isA<StateError>()),
+    );
     expect(
-      realtime.calls.where((call) => call.method == 'session.create'),
+      realtime.calls.where(
+        (call) =>
+            call.method == 'session.title' &&
+            call.params['title'] == 'Weekly review',
+      ),
       isEmpty,
     );
-    final resume = realtime.calls.singleWhere(
-      (call) => call.method == 'session.resume',
+  });
+
+  test('an ordinary bot session remains renameable', () async {
+    final realtime = _BotRealtime(repo);
+    repo.bindRealtime(realtime);
+    addTearDown(realtime.dispose);
+    final bot = HermesBotProfile.fromJson({
+      'name': 'coach',
+      'ui_meta': {
+        'hermes-bots': {'title': 'Fitness Coach'},
+      },
+    });
+
+    final session = await repo.createBotSession(bot);
+    await repo.renameSession(session.id, 'Weekly review');
+
+    final rename = realtime.calls.singleWhere(
+      (call) =>
+          call.method == 'session.title' &&
+          call.params['title'] == 'Weekly review',
     );
-    expect(resume.params['profile'], 'coach');
-    expect(resume.params['session_id'], 'bot-session');
+    expect(rename.params['session_id'], 'fresh-health-live');
   });
 
   test('bot session inventory requests hidden profile history', () async {
@@ -514,7 +571,7 @@ void main() {
         repo,
         soul:
             '# Fitness Coach\n\n**Role:** Fitness Coach\n\nYou are Fitness Coach, a persistent named agent (profile `coach`) on this machine.\nYou keep your own memory, skills, and conversation history across sessions.',
-        hidePinnedFromList: true,
+        listSessionId: 'old-chat',
       );
       repo.bindRealtime(realtime);
       addTearDown(realtime.dispose);
@@ -1037,6 +1094,7 @@ class _BotRealtime extends GatewayRealtime {
     SessionSyncRepository repository, {
     this.soul = '',
     this.hidePinnedFromList = false,
+    this.listSessionId = 'bot-session',
     this.historyMessages = const [
       {'row_id': 7, 'role': 'assistant', 'text': 'Profile-specific answer'},
     ],
@@ -1051,6 +1109,7 @@ class _BotRealtime extends GatewayRealtime {
   final calls = <({String method, Map<String, dynamic> params})>[];
   final String soul;
   final bool hidePinnedFromList;
+  final String listSessionId;
   final List<Map<String, dynamic>> historyMessages;
 
   @override
@@ -1074,7 +1133,7 @@ class _BotRealtime extends GatewayRealtime {
         'sessions': hidePinnedFromList
             ? const []
             : [
-                {'id': 'bot-session', 'title': 'Bot Chat', 'message_count': 1},
+                {'id': listSessionId, 'title': 'Bot Chat', 'message_count': 1},
               ],
       },
       'session.resume' => {'session_id': 'bot-live', 'messages': const []},

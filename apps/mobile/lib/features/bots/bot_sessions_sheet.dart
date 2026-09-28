@@ -138,8 +138,11 @@ class _BotSessionsSheetState extends ConsumerState<_BotSessionsSheet> {
   Future<void> _openChat(HermesSession session) async {
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
-        builder: (_) =>
-            SessionChatScreen(session: session, profileName: widget.bot.name),
+        builder: (_) => SessionChatScreen(
+          session: session,
+          profileName: widget.bot.name,
+          isCanonicalBotChat: session.title?.trim() == 'Bot Chat',
+        ),
       ),
     );
     if (mounted) {

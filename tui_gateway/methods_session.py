@@ -92,6 +92,64 @@ def _profile_session_db(profile_home):
     return _get_db(), False
 
 
+def _infer_profile_for_session_id(session_id: str) -> tuple[str, Path] | None:
+    """Find the sole non-launch profile owning an exact durable session id.
+
+    A reconnect can restore a Bot Chat before the mobile client's in-memory
+    session-to-profile map has been rebuilt.  Exact session ids let the gateway
+    safely recover a unique profile owner; ambiguous matches fail closed.
+    """
+    target = str(session_id or "").strip()
+    if not target:
+        return None
+    try:
+        launch_db = _get_db()
+        if launch_db is not None and launch_db.get_session(target):
+            return None
+    except Exception:
+        # Candidate stores are independent, so a transient launch-store read
+        # should not prevent profile recovery.
+        pass
+
+    try:
+        from hermes_constants import get_default_hermes_root
+        from hermes_state import SessionDB
+
+        profiles_dir = get_default_hermes_root() / "profiles"
+        candidates = [home for home in profiles_dir.iterdir() if home.is_dir()]
+    except Exception:
+        return None
+
+    matches: list[tuple[str, Path]] = []
+    for home in candidates:
+        db_path = home / "state.db"
+        if not db_path.exists():
+            continue
+        db = None
+        try:
+            db = SessionDB(db_path=db_path)
+            if db.get_session(target):
+                matches.append((home.name, home))
+                if len(matches) > 1:
+                    logger.warning(
+                        "session profile inference ambiguous: session=%s profiles=%s",
+                        target,
+                        [name for name, _home in matches],
+                    )
+                    return None
+        except Exception:
+            logger.debug(
+                "session profile inference could not inspect %s",
+                db_path,
+                exc_info=True,
+            )
+        finally:
+            if db is not None:
+                with contextlib.suppress(Exception):
+                    db.close()
+    return matches[0] if len(matches) == 1 else None
+
+
 def _release_db(db) -> None:
     with contextlib.suppress(Exception):
         from hermes_state_registry import release_or_close
@@ -598,6 +656,15 @@ class _Resume:
         # ``profile`` (app-global remote mode): resume from another local profile's state.db.
         self.profile = (params.get("profile") or "").strip() or None
         self.profile_home = _profile_home(self.profile)
+        if self.profile is None:
+            inferred = _infer_profile_for_session_id(target)
+            if inferred is not None:
+                self.profile, self.profile_home = inferred
+                logger.info(
+                    "session.resume recovered profile scope: session=%s profile=%s",
+                    target,
+                    self.profile,
+                )
         self.lazy, self.defer_history = _flag(params, "lazy"), _flag(params, "defer_history")
         # Desktop hydrates over REST; suppress the duplicate WS copy only when asked.
         self.omit_messages, self.eager_build = _flag(params, "omit_messages"), _flag(params, "eager_build")

@@ -26,7 +26,9 @@ if [[ -z "$FLUTTER_DEVICE_ID" ]]; then
 fi
 
 echo "==> Building release for $FLUTTER_DEVICE_ID"
-flutter build ios --release -d "$FLUTTER_DEVICE_ID"
+HERMES_GO_PRIVACY_POLICY_URL="${HERMES_PRIVACY_POLICY_URL:-https://github.com/TheTom/hermes-go/blob/mobile-gateway/PRIVACY.md}"
+flutter build ios --release -d "$FLUTTER_DEVICE_ID" \
+  --dart-define="HERMES_PRIVACY_POLICY_URL=$HERMES_GO_PRIVACY_POLICY_URL"
 
 APP_PATH="$ROOT/build/ios/iphoneos/Runner.app"
 if [[ ! -d "$APP_PATH" ]]; then

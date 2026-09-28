@@ -506,7 +506,7 @@ Future<void> _showAppleHealthDisclosure(BuildContext context) {
       title: const Text('Apple Health in Hermes Go'),
       content: const SingleChildScrollView(
         child: Text(
-          'Hermes Go works with the Apple Health app on iPhone and iPad. The feature is off by default. If you enable it in Settings, iOS asks you to choose which health categories Hermes Go may read, such as activity, sleep, heart, and body measurements.\n\nThe app sends only the samples you authorize to your authenticated, self-hosted Hermes gateway so health-capable bots can answer bounded summary questions. Hermes Go never writes to the Apple Health app. You can turn sync off or delete the gateway copy at any time.',
+          'Hermes Go works with the Apple Health app on iPhone and iPad. The feature is off by default. If you enable it in Settings, iOS asks you to choose which health categories Hermes Go may read, such as activity, sleep, heart, and body measurements.\n\nThe app sends only the samples you authorize to your authenticated, self-hosted Hermes gateway so health-capable bots can answer bounded summary questions. When a bot answers, the gateway may send the requested summary to the model provider you configured. Hermes Go never writes to the Apple Health app. Turning sync off stops future uploads; you can separately delete the gateway copy at any time.',
         ),
       ),
       actions: [

@@ -2,6 +2,8 @@
 abstract final class ReleaseConfig {
   static const privacyPolicyUrl = String.fromEnvironment(
     'HERMES_PRIVACY_POLICY_URL',
+    defaultValue:
+        'https://github.com/TheTom/hermes-go/blob/mobile-gateway/PRIVACY.md',
   );
 
   /// Only expose a public HTTPS policy. A missing/invalid value remains visible

@@ -297,6 +297,7 @@ class SessionChatScreen extends ConsumerStatefulWidget {
     this.onOpenSessionId,
     this.onOpenBotSessions,
     this.profileName,
+    this.isCanonicalBotChat = false,
   });
 
   final HermesSession session;
@@ -325,6 +326,10 @@ class SessionChatScreen extends ConsumerStatefulWidget {
   /// Non-null for Bot Mode chats, whose durable session belongs to a named
   /// server profile rather than the gateway's default profile.
   final String? profileName;
+
+  /// The exact `Bot Chat` registry row is a server-owned identity, not a
+  /// display title. Ordinary bot sessions remain renameable.
+  final bool isCanonicalBotChat;
 
   @override
   ConsumerState<SessionChatScreen> createState() => SessionChatScreenState();
@@ -2340,7 +2345,7 @@ class SessionChatScreenState extends ConsumerState<SessionChatScreen> {
     return Scaffold(
       appBar: AppBar(
         title: InkWell(
-          onTap: _renameCurrentSession,
+          onTap: widget.isCanonicalBotChat ? null : _renameCurrentSession,
           borderRadius: BorderRadius.circular(8),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
@@ -2354,12 +2359,14 @@ class SessionChatScreenState extends ConsumerState<SessionChatScreen> {
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                const SizedBox(width: 6),
-                Icon(
-                  Icons.edit_outlined,
-                  size: 16,
-                  color: theme.colorScheme.onSurface.withValues(alpha: 0.55),
-                ),
+                if (!widget.isCanonicalBotChat) ...[
+                  const SizedBox(width: 6),
+                  Icon(
+                    Icons.edit_outlined,
+                    size: 16,
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.55),
+                  ),
+                ],
               ],
             ),
           ),

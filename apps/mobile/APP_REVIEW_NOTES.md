@@ -11,10 +11,9 @@ Review Information field.
 <!-- BEGIN NOTES BLOCK -->
 WHAT THIS APP IS
 
-Hermes Go is a client for a Hermes agent gateway the user runs on their own
-computer, the same relationship an SSH client has with a server the user runs
-themselves. We operate no backend. Target audience is developers and
-technical users who already self-host a Hermes agent.
+Hermes Go is a client for a Hermes agent gateway the user runs. We operate no
+backend. It is intended for developers and technical users who self-host an
+agent.
 
 DEMO ACCESS (no server required)
 
@@ -26,87 +25,65 @@ A sample workspace is built into the app, so review needs no server.
 5. Password: demo
 6. Tap Sign In.
 
-Then: open a seeded chat from the drawer (menu icon, top left); send a
-message and watch the reply stream with a live tool call; switch models from
-the composer; open the Bots screen; open the Jobs tab and pause a job; open
-Settings, then About.
+Then open a seeded chat from the top-left menu, send a message, switch models,
+open Bots, open Jobs and pause a job, and open Settings.
 
-It runs entirely on device on 127.0.0.1 and no network calls leave the
-device. It is available to every user, not only reviewers, is documented in
-Settings, then About, and the app does no reviewer detection. A "Sample" chip
-shows while it is active so scripted replies cannot be mistaken for a real
-agent.
+The sample runs on-device at 127.0.0.1; no network call leaves the device. It
+is available to every user and marked with a "Sample" chip.
 
 BOTS
 
-A bot is a saved configuration on the user's own gateway: a name, a model and
-a set of instructions. Bots are created and stored by that server. The app
-lists them and opens a chat against one.
+A bot is a name, model and instructions stored on the user's gateway. The app
+lists bots and opens their server-owned conversations.
 
 APPLE HEALTH
 
-Hermes Go clearly identifies this feature as "Apple Health" on the initial
-connection screen and in Settings. It is off by default and opt-in.
-Tap the Apple Health card on the first screen for the full in-app disclosure.
-After entering the sample workspace, open Settings, then Apple Health, to see
-the same disclosure and the sync controls. This row is visible in the sample
-workspace even though sample data never leaves the device.
+The initial connection screen and Settings both identify "Apple Health" and
+open its disclosure. The feature is off by default. It remains visible in the
+sample workspace, where its controls are disabled and no sample leaves the
+device.
 
-When the user turns sync on for a real gateway, iOS shows the standard Health
-permission sheet and the user chooses which categories to allow. The app only
-reads. It never writes or changes anything in Apple Health, which is what the
-update purpose string states. Hermes Go uses HealthKit and does not use
-CareKit.
+On a real gateway, enabling sync opens the standard iOS permission sheet. The
+user chooses categories. Hermes Go reads only, never writes to Apple Health,
+uses HealthKit, and does not use CareKit.
 
-Readings the user allows are sent to that user's own Hermes gateway, the
-self-hosted server described above, so their health bot can summarize trends
-for them. Health data is never sent to us, never shared with any third party,
-and never used for advertising or marketing. We run no server that could
-receive it. Turning the setting off stops the sync and clears its stored
-state.
+Authorized samples go to the user's authenticated gateway. A requested summary
+may go to the model provider configured by that gateway. Nothing is sent to
+the publisher, or used for advertising or marketing. Turning sync off stops
+future uploads. "Delete gateway health data" separately deletes the gateway
+copy and local sync state.
 
 ACCOUNTS, PURCHASES, CONTENT
 
-No account registration and no account deletion flow, because we run no
-account system. The username and password are issued by the user's own
-server. There are no purchases, subscriptions or paid content. No
-user-generated content is shared between users, so there is nothing to report
-or block. Chats are private to the user and their own server.
+We run no account system. Credentials come from the user's gateway. There are
+no purchases or shared user-generated content. Chats are private to the user
+and their server.
 
 PERMISSIONS
 
-Camera and photo library attach an image to a chat message. Microphone and
-speech recognition provide voice dictation. Local network access reaches the
-user's own gateway. Apple Health is covered above. All are optional and
-requested only when the feature is used. The app requests no location,
-contacts or calendar access, and performs no tracking.
+Camera/photos attach images; microphone and speech recognition provide
+dictation; local-network access reaches the user's gateway; Apple Health is
+covered above. Permissions are optional and requested in context. The app
+requests no location, contacts or calendar access and performs no tracking.
 
 EXTERNAL SERVICES
 
-The app talks to one address: the gateway the user enters. We integrate no
-analytics, advertising, crash reporting or tracking SDKs, and no payment
-processor. It contacts no AI provider itself. Any AI service is configured by
-the user on their own server. Apple speech recognition is used for dictation
-and Apple text to speech for reading replies aloud.
+The app contacts the gateway the user enters. It has no analytics, advertising,
+crash-reporting, tracking or payment SDK. AI services are configured on that
+gateway. Apple speech recognition supports dictation and text to speech reads
+replies aloud.
 
 REGIONS AND REGULATED INDUSTRY
 
-The app functions identically in all regions, with no regional feature or
-content differences. It is localized in nine languages. It provides no
-regulated service and includes no protected third-party material.
+The app is the same in all regions, is localized in nine languages, provides
+no regulated service, and includes no protected third-party material.
 
 NO VPN FUNCTIONALITY
 
-This app is not a VPN and provides no network tunneling of any kind. It does
-not link against NetworkExtension, does not use NEVPNManager or
-NETunnelProvider, requests no VPN entitlement, and bundles no tunneling
-library. It cannot route, proxy or observe any traffic other than its own
-requests to the one gateway address the user typed in. It collects no
-information through any tunnel because it creates none.
-
-It makes ordinary HTTPS and WebSocket requests to that address, plus standard
-local network access when it is on the user's own LAN, which is what
-NSLocalNetworkUsageDescription covers.
+This is not a VPN and creates no tunnel. It does not link NetworkExtension, use
+NEVPNManager or NETunnelProvider, request a VPN entitlement, or bundle a
+tunneling library. It only makes HTTP(S)/WebSocket requests to the entered
+gateway, including ordinary local-network access on the user's LAN.
 <!-- END NOTES BLOCK -->
 
 ---
@@ -120,25 +97,19 @@ Thank you. Answers to all seven items follow.
 
 1. SCREEN RECORDING
 
-Attached. It was captured on a physical iPhone 17 Pro and begins with
-launching the app. It shows the built in sample workspace being connected to
-and signed in to, an existing chat opened, a message sent with the reply
-streaming in including a live tool call, a new chat started, the model
-switched, the Jobs tab with a scheduled job paused and resumed, and the
-Settings screen.
+Attached. Captured on a physical iPhone 17 Pro, it shows launch, sample sign-in,
+chat streaming with a tool call, a new chat, model switching, a scheduled job,
+and Settings.
 
-The flows you listed that do not appear are absent because the app does not
-have them:
+The following flows are absent because the app does not have them:
 - No account registration and no account deletion. We operate no account
   system. The username and password belong to the server the user runs.
 - No purchases, subscriptions or paid content of any kind.
 - No user-generated content shared between users, so there is no reporting or
   blocking mechanism to show. A chat is private to the user and their own
   server.
-- Permission prompts do appear in the recording when the relevant feature is
-  first used, for microphone and speech recognition when dictation is tapped.
-  There is no App Tracking Transparency prompt because the app does no
-  tracking.
+- Permission prompts appear when their feature is first used. There is no App
+  Tracking Transparency prompt because the app does no tracking.
 
 2. DEVICES AND OPERATING SYSTEMS TESTED
 
@@ -148,14 +119,11 @@ have them:
 
 3. WHAT THE APP DOES, AND FOR WHOM
 
-Hermes Go is a phone client for a Hermes agent gateway that the user runs on
-their own computer. Hermes is an open source AI agent that people self host on
-a home server, a workstation or a VPS.
+Hermes Go is a phone client for the open-source Hermes agent gateway the user
+self-hosts on a home server, workstation or VPS.
 
-The problem it solves: once you self host an agent, it is reachable only from
-that machine. Hermes Go lets you reach your own agent from your phone, read
-its replies as they stream, review what its scheduled jobs did, and reply
-while away from your desk.
+It lets users reach that agent from a phone, stream replies, and review
+scheduled jobs away from their desk.
 
 Target audience is developers and technical users who already self host a
 Hermes agent. It is not a consumer chatbot and provides no AI service of its
@@ -163,14 +131,11 @@ own.
 
 4. SETUP AND ACCESS
 
-For review, no server is needed. A sample workspace is built into the app:
-launch it, enter demo.hermes.go in "Gateway base URL", tap Continue, sign in
-with username demo and password demo, then tap Sign In. Full steps and a tour
-are in the App Review Information notes.
+For review, use the built-in sample: enter demo.hermes.go, tap Continue, use
+username demo and password demo, then tap Sign In.
 
-For a real user, setup is to run their own Hermes gateway and enter its
-address, then sign in with credentials their own server issues. No sample
-files are required.
+Real users enter their gateway address and credentials. No sample file is
+required.
 
 5. EXTERNAL SERVICES, TOOLS AND PLATFORMS
 
@@ -182,13 +147,11 @@ types in. It has no backend of ours.
 - No AI provider is contacted by the app. Whether an AI service is used at
   all, and which one, is configured by the user on their own server. The app
   has no credentials for and no knowledge of any such service.
-- Apple frameworks are used for two device features: Speech framework for
-  voice dictation into the message box, and AVSpeechSynthesizer for reading a
-  reply aloud.
-- Third party code in the app is open source Flutter plugins providing device
-  functionality only, for example keychain storage, local notifications, an
-  on device SQLite cache, image picking and sharing. None transmits user data
-  anywhere.
+- Apple frameworks provide dictation, read-aloud, and optional read-only Apple
+  Health access. Authorized health samples go to the user's gateway; requested
+  summaries may reach its configured model provider.
+- Open-source Flutter plugins provide secure storage, notifications, an
+  on-device SQLite cache, image picking, sharing, and Apple Health access.
 
 6. REGIONAL DIFFERENCES
 
@@ -215,13 +178,13 @@ Tom
 
 ---
 
-## BLOCK C: reply to Guideline 2.5.1 and 2.3.3, build 40
+## BLOCK C: reply to Guideline 2.5.1 and 2.3.3, build 41
 
 Attach a physical-device recording that follows the steps below, and replace
 the bracketed App Store Connect screenshot confirmation before sending.
 
 <!-- BEGIN HEALTHKIT SCREENSHOT REPLY BLOCK -->
-Thank you for identifying both issues. I addressed them in build 40.
+Thank you for identifying both issues. I addressed them in build 41.
 
 Guideline 2.5.1:
 Hermes Go now clearly identifies its optional integration as "Apple Health"
@@ -229,8 +192,9 @@ directly on the initial connection screen, before sign-in, and again in
 Settings. Tapping either entry explains that the feature works with the Apple
 Health app, is off by default, reads only categories the user explicitly
 authorizes, sends those samples only to the user's authenticated self-hosted
-Hermes gateway, and never writes to the Apple Health app. The implementation
-uses HealthKit and does not use CareKit.
+Hermes gateway, and never writes to the Apple Health app. A requested summary
+may be processed by the model provider the gateway owner configured. The
+implementation uses HealthKit and does not use CareKit.
 
 The attached recording was captured on a physical iPhone. It shows:
 1. Launching Hermes Go and tapping Apple Health on the first screen.
@@ -248,13 +212,14 @@ Thank you,
 Tom
 <!-- END HEALTHKIT SCREENSHOT REPLY BLOCK -->
 
-### App Store description insertion for build 40
+### App Store description insertion for build 41
 
 Add this under WHAT YOU CAN DO so the marketing text also identifies the
 integration, as required by Guideline 2.5.1:
 
 • On iPhone and iPad, optionally sync health data you authorize from the Apple
 Health app to your authenticated, self-hosted gateway for bounded bot summaries.
+The gateway may send a requested summary to its configured model provider.
 Hermes Go reads only, never writes to the Apple Health app, and the feature is
 off by default.
 
